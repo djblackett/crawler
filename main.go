@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,7 +66,8 @@ func main() {
 
 	cfg.wg.Wait()
 
-	fmt.Println(cfg.pages)
+	// fmt.Println(cfg.pages)
+	printReport(cfg.pages, baseURL)
 
 }
 
@@ -135,10 +137,10 @@ func (cfg *config) crawlPage(rawCurrentURL string) {
 		return
 	}
 
-	isFirst := cfg.addPageVisit(normalizedURL)
-	if !isFirst {
-		return
-	}
+	// isFirst := cfg.addPageVisit(normalizedURL)
+	// if !isFirst {
+	// 	return
+	// }
 
 	html, err := getHTML(rawCurrentURL)
 	if err != nil {
@@ -170,9 +172,9 @@ func (cfg *config) crawlPage(rawCurrentURL string) {
 			cfg.mu.Unlock()
 			continue
 		} else {
-			cfg.pages[normalizedLink] = 0
+			cfg.pages[normalizedLink] = 1
 		}
-		cfg.pages[normalizedLink] = 1
+
 		cfg.mu.Unlock()
 
 		cfg.wg.Add(1)
@@ -181,10 +183,16 @@ func (cfg *config) crawlPage(rawCurrentURL string) {
 }
 
 func printReport(pages map[string]int, baseURL string) {
-	fmt.Println(`=============================
-  REPORT for https://example.com
-=============================`)
+	fmt.Printf(`=============================
+  REPORT for %s
+=============================
+`, baseURL)
+	fmt.Println()
+	pagesSlice := sortPages(pages)
+	for _, page := range pagesSlice {
 
+		fmt.Printf("Found %d internal links to %s\n", page.count, page.url)
+	}
 }
 
 func (cfg *config) addPageVisit(normalizedURL string) (isFirst bool) {
@@ -198,4 +206,28 @@ func (cfg *config) addPageVisit(normalizedURL string) (isFirst bool) {
 
 	cfg.pages[normalizedURL] = 1
 	return true
+}
+
+type Page struct {
+	url   string
+	count int
+}
+
+func sortPages(pages map[string]int) []Page {
+	pagesSlice := make([]Page, 0, len(pages))
+	for key, val := range pages {
+		pagesSlice = append(pagesSlice, Page{
+			url:   key,
+			count: val,
+		})
+	}
+
+	sort.Slice(pagesSlice, func(i, j int) bool {
+		if pagesSlice[i] != pagesSlice[j] {
+			return pagesSlice[i].count > pagesSlice[j].count
+		}
+		return pagesSlice[i].url < pagesSlice[j].url
+	})
+
+	return pagesSlice
 }
